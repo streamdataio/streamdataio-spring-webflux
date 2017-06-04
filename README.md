@@ -1,4 +1,4 @@
-# Simple Spring Web Flux app using streamdata.io
+# A Simple Spring Web Flux app using streamdata.io
 
 This is a sample implementation of a [Spring Web Flux](https://github.com/spring-projects/spring-framework/blob/master/src/docs/asciidoc/web/web-flux.adoc) 
 client that connects to an [Server-Sent Events](https://www.w3.org/TR/eventsource/) Source provided
