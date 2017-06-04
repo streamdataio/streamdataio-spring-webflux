@@ -31,8 +31,9 @@ import reactor.core.publisher.Mono;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
-import java.util.function.Consumer;
+import java.util.function.Function;
 
+import static java.lang.Boolean.FALSE;
 import static org.springframework.core.ResolvableType.forClassWithGenerics;
 import static org.springframework.http.MediaType.TEXT_EVENT_STREAM;
 import static org.springframework.web.reactive.function.BodyExtractors.toFlux;
@@ -71,35 +72,12 @@ public class StreamdataioSpringWebfluxApplication {
 						  .exchange()
 						  .flatMapMany(response -> response.body(toFlux(type)));
 
-			// Subscribe to the flux with a consumer that applies patches
-			events.subscribe(new Consumer<ServerSentEvent<JsonNode>>() {
-				private JsonNode current;
-
-				@Override
-				public void accept(final ServerSentEvent<JsonNode> aEvent) {
-					aEvent.event()
-						  .ifPresent(type -> {
-							  switch (type) {
-								  case "data":
-									  aEvent.data().ifPresent(data -> current = data);
-									  break;
-
-								  case "patch":
-									  aEvent.data().ifPresent(data -> current = JsonPatch.apply(data, current));
-									  break;
-
-								  case "error":
-									  aEvent.data().ifPresent(System.err::println);
-									  break;
-
-									  default:
-										  throw new IllegalArgumentException("Unknown type: " + type);
-								  }
-
-								  System.out.println(current);
-							  });
-				}
-			}, Throwable::printStackTrace);
+			// use of a transformer to apply the patches
+			events.as(new PatchTransformer())
+				   // Subscribe to the flux with a consumer that applies patches
+				   .subscribe(System.out::println,
+							   Throwable::printStackTrace);
+;
 
 			// Add a block here because CommandLineRunner returns after the execution of the code
 			// ... and make the code run 1 day.
@@ -108,4 +86,48 @@ public class StreamdataioSpringWebfluxApplication {
 				.block();
 		};
 	}
+
+	static class PatchTransformer implements Function<Flux<ServerSentEvent<JsonNode>>, Flux<JsonNode>> {
+
+		@Override
+		public Flux<JsonNode> apply(final Flux<ServerSentEvent<JsonNode>> aFlux) {
+			return aFlux.filter(evt -> evt.data().isPresent())
+						.filter(evt -> evt.event()
+										  .map(evtType -> "data".equals(evtType)
+															|| "patch".equals(evtType)
+															|| "error".equals(evtType))
+										  .orElse(FALSE))
+						.map(new Function<ServerSentEvent<JsonNode>, JsonNode>() {
+							private JsonNode current;
+
+							@Override
+							public JsonNode apply(final ServerSentEvent<JsonNode> aEvent) {
+								String type = aEvent.event().get();
+
+								switch (type) {
+									case "data":
+										current = aEvent.data().get();
+										break;
+
+									case "patch":
+										current = JsonPatch.apply(aEvent.data().get(), current);
+										break;
+
+									case "error":
+										aEvent.data()
+											  .ifPresent(data -> {
+												  throw new RuntimeException("received an error! " + data);
+											  });
+										break;
+
+									default:
+										throw new IllegalArgumentException("Unknown type: " + type);
+								}
+
+								return current;
+							}
+						});
+			}
+		}
+
 }
