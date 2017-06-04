@@ -39,3 +39,18 @@ You can use the provided demo example API which simulates updating stocks prices
 'http://stockmarket.streamdata.io/prices'
 
 Feel free to test it with any REST/Json API of your choice.
+
+## Notes
+
+This is a fairly basic implementation and can be viewed more as a starting
+point for your own implementation.
+
+Dependening on your use-case, you may enhance:
+
+- the error handling (retry, etc.) but by keeping in
+mind that is wiser to close the connection if "fatal" errors
+are received (errors that should stop any processing, etc.)
+- patch handling
+- ...
+ 
+A blog post is published [here](http://streamdata.io/using-spring-web-flux-as-a-java-client-of-streamdata-io) 
