@@ -77,27 +77,27 @@ public class StreamdataioSpringWebfluxApplication {
 
 				@Override
 				public void accept(final ServerSentEvent<JsonNode> aEvent) {
-					String type = aEvent.event()
-									 .orElseThrow(() -> new IllegalArgumentException("No event type defined!!!"));
+					aEvent.event()
+						  .ifPresent(type -> {
+							  switch (type) {
+								  case "data":
+									  aEvent.data().ifPresent(data -> current = data);
+									  break;
 
-					switch (type) {
-						case "data":
-							aEvent.data().ifPresent(data -> current = data);
-							break;
+								  case "patch":
+									  aEvent.data().ifPresent(data -> current = JsonPatch.apply(data, current));
+									  break;
 
-						case "patch":
-							aEvent.data().ifPresent(data -> current = JsonPatch.apply(data, current));
-							break;
+								  case "error":
+									  aEvent.data().ifPresent(System.err::println);
+									  break;
 
-						case "error":
-							aEvent.data().ifPresent(System.err::println);
-							break;
+									  default:
+										  throw new IllegalArgumentException("Unknown type: " + type);
+								  }
 
-						default:
-							throw new IllegalArgumentException("Unknown type: " + type);
-					}
-
-					System.out.println(current);
+								  System.out.println(current);
+							  });
 				}
 			}, Throwable::printStackTrace);
 
