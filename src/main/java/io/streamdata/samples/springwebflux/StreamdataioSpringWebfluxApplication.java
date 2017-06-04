@@ -15,15 +15,25 @@
  */
 package io.streamdata.samples.springwebflux;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.ResolvableType;
+import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
+
+import static org.springframework.core.ResolvableType.forClassWithGenerics;
+import static org.springframework.http.MediaType.TEXT_EVENT_STREAM;
+import static org.springframework.web.reactive.function.BodyExtractors.toFlux;
 
 @SpringBootApplication
 public class StreamdataioSpringWebfluxApplication {
@@ -39,6 +49,30 @@ public class StreamdataioSpringWebfluxApplication {
 	@Bean
 	public CommandLineRunner myCommandLineRunner() {
 		return args -> {
+			String api = "http://stockmarket.streamdata.io/prices";
+			String token = "[YOUR TOKEN HERE]";
+
+			URI streamdataUri = new URI("https://streamdata.motwin.net/"
+												+ api
+												+ "?X-Sd-Token="
+												+ token);
+
+
+			// source: https://github.com/spring-projects/spring-framework/blob/v5.0.0.RC1/spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/SseIntegrationTests.java
+			ResolvableType type = forClassWithGenerics(ServerSentEvent.class, JsonNode.class);
+
+			// Create the web client and the flux of events
+			WebClient client = WebClient.create();
+			Flux<ServerSentEvent<JsonNode>> events =
+					client.get()
+						  .uri(streamdataUri)
+						  .accept(TEXT_EVENT_STREAM)
+						  .exchange()
+						  .flatMapMany(response -> response.body(toFlux(type)));
+
+			// Subscribe to the flux
+			events.subscribe(System.out::println,
+							 Throwable::printStackTrace);
 
 			// Add a block here because CommandLineRunner returns after the execution of the code
 			// ... and make the code run 1 day.
