@@ -16,6 +16,7 @@
 package io.streamdata.samples.springwebflux;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.flipkart.zjsonpatch.JsonPatch;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
@@ -30,6 +31,7 @@ import reactor.core.publisher.Mono;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
+import java.util.function.Consumer;
 
 import static org.springframework.core.ResolvableType.forClassWithGenerics;
 import static org.springframework.http.MediaType.TEXT_EVENT_STREAM;
@@ -57,7 +59,6 @@ public class StreamdataioSpringWebfluxApplication {
 												+ "?X-Sd-Token="
 												+ token);
 
-
 			// source: https://github.com/spring-projects/spring-framework/blob/v5.0.0.RC1/spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/SseIntegrationTests.java
 			ResolvableType type = forClassWithGenerics(ServerSentEvent.class, JsonNode.class);
 
@@ -70,9 +71,35 @@ public class StreamdataioSpringWebfluxApplication {
 						  .exchange()
 						  .flatMapMany(response -> response.body(toFlux(type)));
 
-			// Subscribe to the flux
-			events.subscribe(System.out::println,
-							 Throwable::printStackTrace);
+			// Subscribe to the flux with a consumer that applies patches
+			events.subscribe(new Consumer<ServerSentEvent<JsonNode>>() {
+				private JsonNode current;
+
+				@Override
+				public void accept(final ServerSentEvent<JsonNode> aEvent) {
+					String type = aEvent.event()
+									 .orElseThrow(() -> new IllegalArgumentException("No event type defined!!!"));
+
+					switch (type) {
+						case "data":
+							aEvent.data().ifPresent(data -> current = data);
+							break;
+
+						case "patch":
+							aEvent.data().ifPresent(data -> current = JsonPatch.apply(data, current));
+							break;
+
+						case "error":
+							aEvent.data().ifPresent(System.err::println);
+							break;
+
+						default:
+							throw new IllegalArgumentException("Unknown type: " + type);
+					}
+
+					System.out.println(current);
+				}
+			}, Throwable::printStackTrace);
 
 			// Add a block here because CommandLineRunner returns after the execution of the code
 			// ... and make the code run 1 day.
