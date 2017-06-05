@@ -16,7 +16,6 @@
 package io.streamdata.samples.springwebflux;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.flipkart.zjsonpatch.JsonPatch;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
@@ -31,7 +30,12 @@ import reactor.core.publisher.Mono;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.lang.Boolean.FALSE;
 import static org.springframework.core.ResolvableType.forClassWithGenerics;
@@ -55,10 +59,13 @@ public class StreamdataioSpringWebfluxApplication {
             String api = "http://stockmarket.streamdata.io/prices";
             String token = "[YOUR TOKEN HERE]";
 
-            URI streamdataUri = new URI("https://streamdata.motwin.net/"
-                                            + api
-                                            + "?X-Sd-Token="
-                                            + token);
+            // If ever you want to pass some headers to your API
+            // specify a header map associated with the request
+            Map<String,String> headers = new HashMap<>();
+            // add this header if you wish to stream Json rather than Json-patch
+            // NOTE: no 'patch' event will be emitted.
+            // headers.put("Accept", "application/json");
+            URI streamdataUri = streamdataUri(api, token, headers);
 
             // source: https://github.com/spring-projects/spring-framework/blob/v5.0.0.RC1/spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/SseIntegrationTests.java
             ResolvableType type = forClassWithGenerics(ServerSentEvent.class, JsonNode.class);
@@ -77,7 +84,6 @@ public class StreamdataioSpringWebfluxApplication {
                   // Subscribe to the flux with a consumer that applies patches
                   .subscribe(System.out::println,
                              Throwable::printStackTrace);
-            ;
 
             // Add a block here because CommandLineRunner returns after the execution of the code
             // ... and make the code run 1 day.
@@ -110,7 +116,8 @@ public class StreamdataioSpringWebfluxApplication {
                                         break;
 
                                     case "patch":
-                                        current = JsonPatch.apply(aEvent.data().get(), current);
+                                       // current = JsonPatch.apply(aEvent.data().get(), current);
+                                        current = aEvent.data().get();
                                         break;
 
                                     case "error":
@@ -130,4 +137,40 @@ public class StreamdataioSpringWebfluxApplication {
         }
     }
 
+
+    private static URI streamdataUri(String aApiUrl, String aToken, Map<String, String> aHeaders) throws URISyntaxException {
+        Objects.requireNonNull(aApiUrl);
+        Objects.requireNonNull(aToken);
+        Objects.requireNonNull(aHeaders);
+
+        URI uri = new URI(aApiUrl);
+        String queryParamSeparator =
+            (uri.getQuery() == null || uri.getQuery().isEmpty() ) ? "?" : "&" ;
+
+        return new URI("https://streamdata.motwin.net/"
+                           + aApiUrl
+                           + queryParamSeparator
+                           + "X-Sd-Token="
+                           + aToken
+                           + apiHeaders(aHeaders).map(h -> "&" + h).orElse("")
+        );
+    }
+
+    private static Optional<String> apiHeaders(Map<String, String> aHeaders) {
+        Objects.requireNonNull(aHeaders);
+
+        Optional<String> queryParams;
+
+        if (aHeaders.isEmpty()) {
+            queryParams = Optional.empty();
+        } else {
+            queryParams = Optional.of(
+                aHeaders.entrySet()
+                        .stream()
+                        .map(e -> "X-Sd-Header" + "=" +  e.getKey() + ":" + e.getValue())
+                        .collect(Collectors.joining("&")));
+        }
+
+        return queryParams;
+    }
 }
