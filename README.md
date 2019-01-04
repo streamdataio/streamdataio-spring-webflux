@@ -53,4 +53,4 @@ are received (errors that should stop any processing, etc.)
 - patch handling
 - ...
  
-A blog post is published [here](http://streamdata.io/using-spring-web-flux-as-a-java-client-of-streamdata-io) 
+A blog post is published [here](https://streamdata.io/blog/using-spring-web-flux-as-a-java-client-of-streamdata-io/) 
